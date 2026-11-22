@@ -86,8 +86,10 @@ def test_unmatched_goes_to_remainder(rules):
 
 
 def test_samples_capped_at_two(rules):
-    findings, _ = rules.apply([access(f"/.env?i={i}", 404) for i in range(30)])
+    paths = ["/.env", "/.git/config", "/wp-login.php"]
+    findings, _ = rules.apply([access(paths[i % 3], 404) for i in range(30)])
     assert len(findings[0].samples) == 2
+    assert len(set(findings[0].samples)) == 2
 
 
 def test_long_subject_truncated(rules):
