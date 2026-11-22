@@ -1,0 +1,60 @@
+{
+ "about": "40 denied Cloudflare Access logins for one app.",
+ "sources": [
+  {
+   "name": "app",
+   "logs": [
+    {
+     "file": "access.log",
+     "format": "combined"
+    },
+    {
+     "file": "app.log",
+     "format": "plain"
+    }
+   ]
+  }
+ ],
+ "llm": null,
+ "steps": [
+  {
+   "access": [
+    {
+     "repeat": 40,
+     "item": {
+      "action": "login",
+      "allowed": false,
+      "app_domain": "dinner.example.com",
+      "connection": "onetimepin",
+      "created_at": "2026-01-01T12:01:00Z",
+      "ip_address": "198.51.100.7",
+      "user_email": "nobody@example.net"
+     }
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "alerts": [
+   [
+    "access-denied: dinner.example.com",
+    "high"
+   ]
+  ],
+  "findings": [
+   {
+    "rule": "access-denied",
+    "severity": "high",
+    "count": 40
+   }
+  ],
+  "digest_contains": [
+   "access-denied",
+   "dinner.example.com"
+  ],
+  "digest_absent": [
+   "nobody@example.net"
+  ],
+  "digest_severity": "high"
+ }
+}

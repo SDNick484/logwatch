@@ -1,0 +1,67 @@
+{
+ "about": "Log is rotated between collections; every line is counted exactly once.",
+ "sources": [
+  {
+   "name": "app",
+   "logs": [
+    {
+     "file": "access.log",
+     "format": "combined"
+    },
+    {
+     "file": "app.log",
+     "format": "plain"
+    }
+   ]
+  }
+ ],
+ "llm": null,
+ "steps": [
+  {
+   "append": [
+    {
+     "file": "access.log",
+     "repeat": 25,
+     "line": "203.0.113.9 - - [01/Jan/2026:12:00:00 +0000] \"GET /.env HTTP/1.1\" 404 153 \"-\" \"curl/8.0\""
+    }
+   ]
+  },
+  {
+   "append": [
+    {
+     "file": "access.log",
+     "repeat": 12,
+     "line": "203.0.113.9 - - [01/Jan/2026:12:00:00 +0000] \"GET /.env HTTP/1.1\" 404 153 \"-\" \"curl/8.0\""
+    }
+   ],
+   "rotate": [
+    "access.log"
+   ],
+   "append_after": [
+    {
+     "file": "access.log",
+     "repeat": 13,
+     "line": "203.0.113.9 - - [01/Jan/2026:12:00:00 +0000] \"GET /.env HTTP/1.1\" 404 153 \"-\" \"curl/8.0\""
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "alerts": [],
+  "findings": [
+   {
+    "rule": "path-scanning",
+    "severity": "medium",
+    "count": 25
+   },
+   {
+    "rule": "path-scanning",
+    "severity": "medium",
+    "count": 25
+   }
+  ],
+  "digest_contains": [
+   "50 events across 2 collection windows"
+  ]
+ }
+}

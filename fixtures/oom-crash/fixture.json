@@ -1,0 +1,84 @@
+{
+ "about": "Service is OOM-killed and stays down for two more cycles.",
+ "sources": [
+  {
+   "name": "app",
+   "service": "app-svc",
+   "logs": [
+    {
+     "file": "access.log",
+     "format": "combined"
+    },
+    {
+     "file": "app.log",
+     "format": "plain"
+    }
+   ]
+  }
+ ],
+ "llm": null,
+ "steps": [
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      10
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "crashed",
+      null
+     ]
+    },
+    "oom": [
+     "app-svc"
+    ]
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "crashed",
+      null
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "crashed",
+      null
+     ]
+    }
+   }
+  }
+ ],
+ "expected": {
+  "alerts": [
+   [
+    "Service down: app",
+    "high"
+   ],
+   [
+    "OOM kill: app",
+    "high"
+   ]
+  ],
+  "open_alerts": [
+   [
+    "svc:app:down",
+    "high"
+   ]
+  ],
+  "findings": []
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "about": "The model returns something that is not the requested JSON.",
+ "sources": [
+  {
+   "name": "app",
+   "logs": [
+    {
+     "file": "access.log",
+     "format": "combined"
+    },
+    {
+     "file": "app.log",
+     "format": "plain"
+    }
+   ]
+  }
+ ],
+ "llm": "garbage",
+ "steps": [
+  {
+   "append": [
+    {
+     "file": "app.log",
+     "repeat": 4,
+     "line": "cache miss ratio 0.93 for shard 7"
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "alerts": [],
+  "findings": [],
+  "digest_contains": [
+   "Model classification unavailable",
+   "cache miss ratio"
+  ],
+  "digest_absent": [
+   "Nothing notable"
+  ]
+ }
+}

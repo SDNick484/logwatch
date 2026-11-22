@@ -1,0 +1,59 @@
+{
+ "about": "300 requests for scanner paths from one address.",
+ "sources": [
+  {
+   "name": "app",
+   "logs": [
+    {
+     "file": "access.log",
+     "format": "combined"
+    },
+    {
+     "file": "app.log",
+     "format": "plain"
+    }
+   ]
+  }
+ ],
+ "llm": null,
+ "steps": [
+  {
+   "append": [
+    {
+     "file": "access.log",
+     "repeat": 100,
+     "line": "203.0.113.9 - - [01/Jan/2026:12:00:00 +0000] \"GET /.env HTTP/1.1\" 404 153 \"-\" \"curl/8.0\""
+    },
+    {
+     "file": "access.log",
+     "repeat": 100,
+     "line": "203.0.113.9 - - [01/Jan/2026:12:00:00 +0000] \"GET /wp-login.php HTTP/1.1\" 404 153 \"-\" \"curl/8.0\""
+    },
+    {
+     "file": "access.log",
+     "repeat": 100,
+     "line": "203.0.113.9 - - [01/Jan/2026:12:00:00 +0000] \"GET /.git/config HTTP/1.1\" 404 153 \"-\" \"curl/8.0\""
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "alerts": [],
+  "findings": [
+   {
+    "rule": "path-scanning",
+    "severity": "medium",
+    "count": 300
+   }
+  ],
+  "digest_contains": [
+   "path-scanning",
+   "300 events",
+   "203.0.113.9"
+  ],
+  "digest_absent": [
+   "Nothing notable"
+  ],
+  "digest_severity": "medium"
+ }
+}

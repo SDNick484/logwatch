@@ -1,0 +1,157 @@
+{
+ "about": "Six respawns in ten minutes, then stable.",
+ "sources": [
+  {
+   "name": "app",
+   "service": "app-svc",
+   "logs": [
+    {
+     "file": "access.log",
+     "format": "combined"
+    },
+    {
+     "file": "app.log",
+     "format": "plain"
+    }
+   ]
+  }
+ ],
+ "llm": null,
+ "advance_s": 100,
+ "steps": [
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      10
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      11
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      12
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      13
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      14
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      15
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      16
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      16
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      16
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      16
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      16
+     ]
+    }
+   }
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      16
+     ]
+    }
+   }
+  }
+ ],
+ "expected": {
+  "alerts": [
+   [
+    "Restart loop: app",
+    "high"
+   ],
+   [
+    "Stable again: app",
+    "low"
+   ]
+  ],
+  "open_alerts": [],
+  "findings": []
+ }
+}
