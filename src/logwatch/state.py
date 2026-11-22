@@ -39,6 +39,18 @@ class State:
     def close(self) -> None:
         self._db.close()
 
+    def _many(self, sql: str, rows: list[tuple]) -> None:
+        """Bulk insert in one transaction (one fsync, not one per row)."""
+        if not rows:
+            return
+        self._db.execute("BEGIN")
+        try:
+            self._db.executemany(sql, rows)
+        except BaseException:
+            self._db.execute("ROLLBACK")
+            raise
+        self._db.execute("COMMIT")
+
     # cursors
     def get_cursor(self, path: str) -> Cursor | None:
         row = self._db.execute("SELECT inode, offset FROM cursors WHERE path=?", (path,)).fetchone()
@@ -79,7 +91,7 @@ class State:
 
     # findings
     def add_findings(self, findings: list[Finding], now: datetime) -> None:
-        self._db.executemany(
+        self._many(
             "INSERT INTO findings (ts, body) VALUES (?,?)",
             [(now.timestamp(), json.dumps(f.__dict__)) for f in findings],
         )
@@ -120,7 +132,7 @@ class State:
 
     # remainder events held between digests
     def add_remainder(self, events: list[Event]) -> None:
-        self._db.executemany(
+        self._many(
             "INSERT INTO remainder (body) VALUES (?)",
             [(json.dumps([e.source, e.file, e.text, dict(e.fields)]),) for e in events],
         )

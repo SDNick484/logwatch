@@ -23,4 +23,6 @@ python3 -m venv .venv
 - `fixtures/` synthetic incidents replayed by the test suite
 - `deploy/` OpenRC init script and install notes
 
+Install on Alpine/OpenRC: `deploy/install.md`. What is unverified about the service probe: `deploy/probe-notes.md`.
+
 Design and build plan: see `docs/README.md`.

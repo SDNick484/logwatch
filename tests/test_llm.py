@@ -148,3 +148,15 @@ def test_anthropic_client_http_error_returns_none(tmp_path):
     client = AnthropicClient("https://llm.example", "k", "m",
                              http_client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(500, text="down"))))
     assert classify([C1], client, tmp_path) is None
+
+
+def test_client_addresses_masked_before_leaving_the_box(tmp_path):
+    sample = "203.0.113.9 said hi from 2001:db8::1 at 12:00:01"
+    c = Cluster("c55555555", "app", "<*> said hi from 2001:db8::1 at <*>", 2, (sample,))
+    fake = Fake(reply(item("c55555555")))
+    classify([c], fake, tmp_path)
+    user = fake.calls[0][1]
+    assert "203.0.113.9" not in user and "2001:db8::1" not in user
+    inner = json.loads(user.split("<log_data>")[1].split("</log_data>")[0])
+    assert inner[0]["samples"] == ["<ip> said hi from <ip> at 12:00:01"]
+    assert all("203.0.113.9" not in p.read_text() for p in tmp_path.iterdir())

@@ -16,6 +16,13 @@ _KV = re.compile(
 )
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
+_IPV4 = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
+_IPV6 = re.compile(
+    r"(?<![0-9A-Fa-f:])(?:(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}"
+    r"|(?:[0-9A-Fa-f]{1,4}:){1,6}:(?:[0-9A-Fa-f]{1,4}:){0,5}[0-9A-Fa-f]{0,4}"
+    r"|::(?:[0-9A-Fa-f]{1,4}:){0,6}[0-9A-Fa-f]{1,4})(?![0-9A-Fa-f:])"
+)
+
 _KEY_PREFIX = re.compile(r"\b(?:sk|pk|rk|ghp|gho|ghs|glpat|xox[abprs])[-_][-_A-Za-z0-9]{10,}|\bAKIA[A-Z0-9]{12,}")
 _LONG_TOKEN = re.compile(r"[A-Za-z0-9+/_=-]{24,}")
 _HEX = re.compile(r"[0-9a-fA-F]{32,}")
@@ -46,3 +53,8 @@ def residual_secret_scan(text: str) -> str:
     """Second pass before text leaves the box: mask key-like and high-entropy tokens."""
     text = _KEY_PREFIX.sub("<secret>", text)
     return _LONG_TOKEN.sub(lambda m: "<secret>" if _looks_secret(m.group(0)) else m.group(0), text)
+
+
+def mask_addresses(text: str) -> str:
+    """Hide client addresses. Used only for text sent to the model; rules still see them."""
+    return _IPV6.sub("<ip>", _IPV4.sub("<ip>", text))

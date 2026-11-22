@@ -15,7 +15,7 @@ from typing import Literal, Protocol
 import httpx
 
 from .cluster import Cluster
-from .redact import residual_secret_scan
+from .redact import mask_addresses, residual_secret_scan
 
 CATEGORIES = ("app_error", "security", "performance", "config", "benign", "unknown")
 SEVERITIES = ("low", "medium", "high")
@@ -76,14 +76,18 @@ class Classification:
     suspicious_content: bool
 
 
+def _outbound(text: str) -> str:
+    return mask_addresses(residual_secret_scan(text))
+
+
 def build_request(clusters: list[Cluster]) -> tuple[str, str]:
     payload = [
         {
             "id": c.id,
             "source": c.source,
-            "template": residual_secret_scan(c.template),
+            "template": _outbound(c.template),
             "count": c.count,
-            "samples": [residual_secret_scan(s) for s in c.samples],
+            "samples": [_outbound(s) for s in c.samples],
         }
         for c in clusters
     ]

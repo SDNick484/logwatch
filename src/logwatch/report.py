@@ -72,7 +72,7 @@ def summarize(
     lines = sum(c.count for c in clusters)
     line = (
         f"{counts['high']} high, {counts['medium']} medium, {counts['low']} low findings. "
-        f"{len(clusters)} unclassified clusters ({lines} lines)."
+        f"{len(clusters)} clusters of other activity ({lines} lines)."
     )
     return top, line
 

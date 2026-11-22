@@ -85,3 +85,19 @@ def test_reopen_db_persists(tmp_path):
     s2 = _state(tmp_path)
     assert s2.get_cursor("/x") == Cursor(1, 2)
     assert s2.open_alert("k", "high", "t", "m", NOW) is False
+
+
+def test_bulk_remainder_insert_is_one_transaction(tmp_path):
+    import time
+
+    from logwatch.events import Event
+
+    s = _state(tmp_path)
+    events = [Event("app", "f", None, f"line {i}", {"path": "/x"}) for i in range(20_000)]
+    start = time.perf_counter()
+    s.add_remainder(events)
+    took = time.perf_counter() - start
+    back = s.take_remainder()
+    assert len(back) == 20_000 and back[0].text == "line 0" and back[0].fields == {"path": "/x"}
+    assert s.take_remainder() == []
+    assert took < 2.0, f"bulk insert took {took:.1f}s"

@@ -35,3 +35,7 @@ sources:
         format: plain
   - name: cloudflared
     docker: cloudflared
+  - name: logwatch                       # its own errors show up in the next digest
+    logs:
+      - path: /var/log/logwatch/error.log
+        format: plain

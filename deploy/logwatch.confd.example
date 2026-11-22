@@ -1,0 +1,14 @@
+# Install as /etc/conf.d/logwatch, owner root, mode 0600.
+# OpenRC sources this file before starting the service; the values reach the
+# daemon as environment variables. Never put these in config.yaml or in git.
+
+# Home Assistant long-lived access token (used only to call the notify service)
+export LOGWATCH_HA_TOKEN=""
+
+# Model API key for the digest. Leave empty to ship digests without model classification.
+export LOGWATCH_LLM_API_KEY=""
+
+# Cloudflare: account id (32 hex characters) and an API token with only
+# "Access: Audit Logs Read". Leave empty to skip Access logs.
+export LOGWATCH_CF_ACCOUNT_ID=""
+export LOGWATCH_CF_TOKEN=""
