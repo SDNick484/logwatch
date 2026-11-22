@@ -1,0 +1,37 @@
+# Synthetic example. Replace names and paths with your own.
+state_dir: /var/lib/logwatch
+report_dir: /var/lib/logwatch/reports
+rules_path: /etc/logwatch/rules.yaml
+
+# Optional overrides (defaults shown)
+# tier1_interval_s: 120
+# collect_interval_s: 3600
+# digest_time: "07:00"
+# restart_threshold: 3
+# restart_window_s: 600
+
+llm:
+  enabled: true
+  base_url: https://api.anthropic.com
+  model: claude-haiku-5-5
+  api_key_env: LOGWATCH_LLM_API_KEY     # name of the env var, never the key itself
+
+notify:
+  base_url: http://homeassistant.example:8123
+  token_env: LOGWATCH_HA_TOKEN
+  service: mobile_app_phone
+
+cloudflare:                              # optional; remove to disable
+  account_id_env: LOGWATCH_CF_ACCOUNT_ID
+  token_env: LOGWATCH_CF_TOKEN
+
+sources:
+  - name: dinner-app
+    service: dinner-app                  # OpenRC service name, for Tier 1
+    logs:
+      - path: /var/log/dinner-app/access.log
+        format: combined
+      - path: /var/log/dinner-app/app.log
+        format: plain
+  - name: cloudflared
+    docker: cloudflared
