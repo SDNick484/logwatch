@@ -62,6 +62,7 @@ class Config:
     llm: LLMConfig
     notify: NotifyConfig
     cloudflare: CloudflareConfig | None = None
+    docker_api_url: str | None = None  # a GET-only socket proxy, never the raw socket
     tier1_interval_s: int = 120
     collect_interval_s: int = 3600
     digest_time: str = "07:00"
@@ -157,6 +158,8 @@ def load_config(path: Path) -> Config:
     for key in ("tier1_interval_s", "collect_interval_s", "restart_threshold", "restart_window_s"):
         if key in data:
             opts[key] = _pos_int(data[key], key)
+    if data.get("docker_api_url"):
+        opts["docker_api_url"] = str(data["docker_api_url"]).rstrip("/")
     if "digest_time" in data:
         if not isinstance(data["digest_time"], str) or not _TIME_RE.match(data["digest_time"]):
             raise ConfigError("digest_time must be a quoted HH:MM string")

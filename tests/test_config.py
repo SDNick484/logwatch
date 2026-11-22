@@ -34,6 +34,12 @@ def test_cloudflare_optional(tmp_path):
     assert cfg.cloudflare is None
 
 
+def test_docker_api_url_optional(tmp_path):
+    assert load_config(EXAMPLE).docker_api_url is None
+    cfg = load_config(_write(tmp_path, lambda d: d.update(docker_api_url="http://127.0.0.1:2375/")))
+    assert cfg.docker_api_url == "http://127.0.0.1:2375"
+
+
 def test_duplicate_source_name(tmp_path):
     p = _write(tmp_path, lambda d: d["sources"].append(dict(d["sources"][0])))
     with pytest.raises(ConfigError, match="dinner-app"):
