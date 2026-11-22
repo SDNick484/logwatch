@@ -14,6 +14,17 @@ noise:
   - regex: '(?i)kube-probe|healthcheck'
 
 rules:
+  # Listed first so that text aimed at an AI reader is always reported and never
+  # reaches the model unflagged. The model's own "suspicious_content" flag covers
+  # wording this pattern misses.
+  - name: instruction-like-text
+    severity: medium
+    match:
+      regex: '(?i)(ignore|disregard|forget) (all |any |the )?(previous|prior|above|earlier) (instructions|prompts?)|system prompt|you are now (a|an|the) '
+    group_by: source
+    threshold: 1
+    summary: "{count} log lines that address an AI reader"
+
   - name: path-scanning
     severity: medium
     match:

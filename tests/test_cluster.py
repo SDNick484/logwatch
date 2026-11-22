@@ -61,5 +61,14 @@ def test_whitespace_collapsed():
     assert len(cs) == 1
 
 
+def test_access_events_cluster_by_method_path_status():
+    def acc(path, status, ip):
+        return Event("app", "f", None, f'{ip} - - [x] "GET {path} HTTP/1.1" {status} 1', {"method": "GET", "path": path, "status": str(status), "ip": ip})
+
+    cs = cluster([acc("/odd/endpoint", 200, "203.0.113.1"), acc("/odd/endpoint", 200, "203.0.113.2"), acc("/item/42", 404, "203.0.113.1"), acc("/item/7", 404, "203.0.113.1")])
+    assert [(c.template, c.count) for c in cs] == [("GET /item/<*> 404", 2), ("GET /odd/endpoint 200", 2)] or \
+           [(c.template, c.count) for c in cs] == [("GET /odd/endpoint 200", 2), ("GET /item/<*> 404", 2)]
+
+
 def test_empty():
     assert cluster([]) == []

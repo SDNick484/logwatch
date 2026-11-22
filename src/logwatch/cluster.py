@@ -33,6 +33,13 @@ def template_of(text: str) -> str:
     return _WS.sub(" ", text).strip()
 
 
+def _template(e: Event) -> str:
+    f = e.fields
+    if "method" in f and "path" in f and "status" in f:  # access-log line: shape is method, path, status
+        return f"{f['method']} {template_of(f['path'])} {f['status']}"
+    return template_of(e.text)
+
+
 def _id(source: str, template: str) -> str:
     return "c" + hashlib.sha1(f"{source}\x00{template}".encode("utf-8", "replace")).hexdigest()[:8]
 
@@ -41,7 +48,7 @@ def cluster(events: list[Event], max_clusters: int = 50) -> list[Cluster]:
     counts: dict[tuple[str, str], int] = {}
     samples: dict[tuple[str, str], list[str]] = {}
     for e in events:
-        key = (e.source, template_of(e.text))
+        key = (e.source, _template(e))
         counts[key] = counts.get(key, 0) + 1
         kept = samples.setdefault(key, [])
         if len(kept) < MAX_SAMPLES and e.text not in kept:
