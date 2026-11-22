@@ -1,0 +1,68 @@
+# Noise is dropped before anything else. Rules count matching events per group
+# within one collect cycle (hourly by default) and report at or above threshold.
+#
+# match: one matcher, or a list of matchers (any may match). A matcher is
+#   regex: <pattern>                 applied to the redacted line
+#   field: <name>, regex: <pattern>  applied to a parsed field
+#   field: <name>, equals: <value>
+#   status_class: 4xx | 5xx
+# source: <name>   optional, restrict the rule to one source
+# group_by: source, or the name of a parsed field (ip, app, ...)
+
+noise:
+  - regex: '"(GET|HEAD) /(health|healthz|ping|status)/? HTTP'
+  - regex: '(?i)kube-probe|healthcheck'
+
+rules:
+  - name: path-scanning
+    severity: medium
+    match:
+      field: path
+      regex: '(?i)^/(\.env|\.git/|wp-login\.php|wp-admin|phpmyadmin|cgi-bin/|\.aws/|vendor/phpunit)'
+    group_by: ip
+    threshold: 20
+    summary: "{count} requests for scanner paths from {subject}"
+
+  - name: auth-failures
+    severity: medium
+    match:
+      - field: status
+        regex: '^(401|403)$'
+      - regex: '(?i)invalid (password|credentials)|authentication failed|login failed'
+    group_by: ip
+    threshold: 10
+    summary: "{count} authentication failures from {subject}"
+
+  - name: server-errors
+    severity: medium
+    match:
+      status_class: 5xx
+    group_by: source
+    threshold: 20
+    summary: "{count} server errors (5xx)"
+
+  - name: access-denied
+    severity: high
+    source: cloudflare-access
+    match:
+      field: action
+      equals: denied
+    group_by: app
+    threshold: 10
+    summary: "{count} denied Access logins for {subject}"
+
+  - name: traceback
+    severity: low
+    match:
+      regex: 'Traceback \(most recent call last\)|Exception in thread|panic:'
+    group_by: source
+    threshold: 1
+    summary: "{count} unhandled errors with stack traces"
+
+  - name: tunnel-disconnect
+    severity: medium
+    match:
+      regex: '(?i)connection.*(lost|terminated)|failed to serve tunnel'
+    group_by: source
+    threshold: 3
+    summary: "{count} connection drops"
