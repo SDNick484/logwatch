@@ -109,7 +109,14 @@ if [ "$DRY_RUN" -eq 1 ] && [ ! -x "$LW" ]; then
 		note "would list the log files logwatch cannot read; --grant-log-access would fix them"
 	fi
 else
-	can() { su logwatch -s /bin/sh -c "test -$1 \"\$1\"" sh "$2" 2>/dev/null; }
+	# Try the real operation. busybox `test -r` / `test -x` only look at mode bits and
+	# ignore ACLs, so they report "no" for access that an ACL grants.
+	can() {
+		case "$1" in
+			r) su logwatch -s /bin/sh -c ': <"$1"' sh "$2" 2>/dev/null ;;
+			x) su logwatch -s /bin/sh -c 'cd "$1"' sh "$2" 2>/dev/null ;;
+		esac
+	}
 	list=$(mktemp)
 	"$LW" list-logs "$ETC/config.yaml" >"$list" 2>/dev/null || note "could not read $ETC/config.yaml yet"
 	blocked=0
