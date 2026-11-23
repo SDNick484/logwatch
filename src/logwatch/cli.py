@@ -14,6 +14,7 @@ from .rules import RuleSet
 from .runner import build_runtime, collect_cycle, digest_cycle, run_forever
 from .services import tier1_cycle
 from .state import State
+from .suggest import render_config, suggest_sources
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -29,6 +30,12 @@ def _parser() -> argparse.ArgumentParser:
     y = sub.add_parser("replay", help="replay a synthetic incident fixture")
     y.add_argument("fixture")
     y.add_argument("--rules", default="rules/default.yaml")
+    g = sub.add_parser("suggest-config", help="print a draft config from the running OpenRC services")
+    g.add_argument("--all", action="store_true", help="include system services (sshd, crond, ...)")
+    g.add_argument("--run-dir", default="/run/openrc")
+    g.add_argument("--initd-dir", default="/etc/init.d")
+    l = sub.add_parser("list-logs", help="print every log path declared in a config, one per line")
+    l.add_argument("config")
     return p
 
 
@@ -86,6 +93,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "once":
             return _once(args.cycle, args.config)
+        if args.command == "suggest-config":
+            print(render_config(suggest_sources(Path(args.run_dir), Path(args.initd_dir), args.all)), end="")
+            return 0
+        if args.command == "list-logs":
+            for src in load_config(Path(args.config)).sources:
+                for lf in src.logs:
+                    print(lf.path)
+            return 0
         problems = replay(Path(args.fixture), Path(args.rules))
         for line in problems:
             print(line)

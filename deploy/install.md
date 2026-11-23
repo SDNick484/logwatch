@@ -6,6 +6,30 @@ are run by you; the service itself never runs as root and never needs these righ
 
 Requires Python 3.11 or newer (`python3 --version`).
 
+## Quick install (script)
+
+```sh
+apk add git
+git clone https://github.com/SDNick484/logwatch /opt/logwatch/src
+cd /opt/logwatch/src
+sh deploy/install.sh --dry-run      # prints every command, changes nothing
+sh deploy/install.sh                # as root; safe to re-run, also used for upgrades
+```
+
+The script does steps 1, 2, and 4 below, drafts `/etc/logwatch/config.yaml` from the
+running OpenRC services (`logwatch suggest-config`), installs the service script, and runs
+`check-config`. It does not start the service and does not write secrets.
+
+It lists any declared log file the `logwatch` user cannot read. To have it add a
+read-only ACL for each of those files, re-run with `--grant-log-access`. A file that is
+replaced on rotation loses its ACL; logwatch then reports it as a low "Cannot read log" alert.
+
+The draft config skips system services (sshd, crond, docker, and so on); run
+`logwatch suggest-config --all` to see them. Services whose log path could not be found
+are marked with a comment for you to fill in.
+
+The rest of this page is the same install done by hand.
+
 ## 1. User, directories, code (root)
 
 ```sh
