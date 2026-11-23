@@ -109,6 +109,7 @@ if [ "$DRY_RUN" -eq 1 ] && [ ! -x "$LW" ]; then
 		note "would list the log files logwatch cannot read; --grant-log-access would fix them"
 	fi
 else
+	can() { su logwatch -s /bin/sh -c "test -$1 \"\$1\"" sh "$2" 2>/dev/null; }
 	list=$(mktemp)
 	"$LW" list-logs "$ETC/config.yaml" >"$list" 2>/dev/null || note "could not read $ETC/config.yaml yet"
 	blocked=0
@@ -116,20 +117,34 @@ else
 		case "$f" in /var/log/logwatch/*) continue ;; esac
 		if [ ! -e "$f" ]; then
 			note "missing (fix the path in the config, or ignore until the app writes it): $f"
-		elif su logwatch -s /bin/sh -c 'test -r "$1"' sh "$f" 2>/dev/null; then
+		elif can r "$f"; then
 			:
 		elif [ "$GRANT" -eq 1 ]; then
 			command -v setfacl >/dev/null 2>&1 || run apk add --no-cache acl
-			run setfacl -m u:logwatch:r "$f"
+			# The file needs read; each directory above it needs traverse (x), nothing more.
+			d=$(dirname "$f")
+			while [ "$d" != "/" ]; do
+				can x "$d" || run setfacl -m u:logwatch:x "$d" || note "setfacl failed on $d"
+				d=$(dirname "$d")
+			done
+			run setfacl -m u:logwatch:r "$f" || note "setfacl failed on $f"
+			if [ "$DRY_RUN" -eq 0 ] && ! can r "$f"; then
+				blocked=1
+				note "STILL not readable by logwatch: $f"
+			fi
 		else
 			blocked=1
 			note "not readable by logwatch: $f"
 		fi
 	done <"$list"
 	rm -f "$list"
-	if [ "$blocked" -eq 1 ]; then
-		note "re-run with --grant-log-access to add a read-only ACL for each file above,"
-		note "or grant access yourself. logwatch reports unreadable files as a low alert."
+	if [ "$blocked" -eq 1 ] && [ "$GRANT" -eq 1 ]; then
+		note "ACLs did not take for the files marked STILL. The filesystem may not support"
+		note "ACLs; grant access another way (group ownership) or remove them from the config."
+	elif [ "$blocked" -eq 1 ]; then
+		note "re-run with --grant-log-access to add a read-only ACL for each file above"
+		note "(read on the file, traverse on its directories), or grant access yourself."
+		note "logwatch reports unreadable files as a low alert."
 	fi
 fi
 

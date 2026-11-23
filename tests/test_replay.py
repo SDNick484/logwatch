@@ -84,3 +84,16 @@ def test_once_requires_notify_token(tmp_path, capsys, monkeypatch):
 
 def test_no_args_shows_usage(capsys):
     assert main([]) == 2
+
+
+def test_check_config_distinguishes_missing_from_unreadable(tmp_path, capsys):
+    present = tmp_path / "present.log"
+    present.write_text("")
+
+    def m(d):
+        d["sources"] = [{"name": "app", "logs": [{"path": str(present)}, {"path": str(tmp_path / "not-yet.log")}]}]
+
+    assert main(["check-config", str(_config(tmp_path, m))]) == 0
+    out = capsys.readouterr().out
+    assert "not-yet.log does not exist yet" in out
+    assert "cannot read" not in out

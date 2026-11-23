@@ -49,7 +49,9 @@ def _check_config(path: str) -> int:
     print(f"ok: {len(config.sources)} sources, rules loaded from {config.rules_path}")
     for src in config.sources:
         for lf in src.logs:
-            if not os.access(lf.path, os.R_OK):
+            if not os.path.lexists(lf.path) and os.access(os.path.dirname(lf.path), os.X_OK):
+                print(f"note: {lf.path} does not exist yet (source {src.name})")
+            elif not os.access(lf.path, os.R_OK):
                 print(f"warning: cannot read {lf.path} as this user (source {src.name})")
     wanted = [config.notify.token_env]
     if config.llm.enabled:
