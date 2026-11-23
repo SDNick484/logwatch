@@ -34,6 +34,18 @@ chown root:logwatch /etc/logwatch/*.yaml && chmod 0640 /etc/logwatch/*.yaml
 For each app, list its OpenRC service name and every log file with a format
 (`combined` for access logs, `json`, or `plain`).
 
+Example for a gunicorn app that writes access and error lines to one file
+(`--access-logfile` and `--error-logfile` pointing at the same path): use `combined`.
+Lines that are not access lines are still read; they just have no parsed fields.
+
+```yaml
+  - name: matinee
+    service: matinee
+    logs:
+      - path: /var/log/matinee.log
+        format: combined
+```
+
 ## 3. Read access to the logs (root)
 
 `logwatch` needs read access to each declared log file and execute on its directory.

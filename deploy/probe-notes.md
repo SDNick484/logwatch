@@ -1,48 +1,47 @@
 # Service probe: what is verified and what is not
 
-`OpenRCProbe` was written from OpenRC's documented behavior, without access to the
-target container. Everything below marked UNVERIFIED should be checked once on the box.
-All commands are read-only. Run them as the `logwatch` user (or any unprivileged user).
+## Observed on the target container (2026-11-22)
 
-## Checks to run
+- `rc-service <name> status` **fails for an unprivileged user** (exit 2): it sources
+  `/etc/conf.d/<name>`, which is root-only. The probe therefore does not call `rc-service`.
+- Nearly every app runs under `supervise-daemon`.
+- `/run/openrc/daemons/<name>/001` records `pidfile=/var/run/supervise-<name>.pid`
+  (the supervisor's pid, not the app's).
+- A stopped service has no entry under `/run/openrc/daemons/`.
+- `/sys/fs/cgroup/memory.events` exists and has an `oom_kill` counter.
+- `dmesg` is denied inside the container, so OOM alerts cannot name the process.
+
+## How the probe decides
+
+| State | Rule |
+|---|---|
+| started | `/run/openrc/started/<name>` exists and every recorded pidfile's pid is alive in `/proc` |
+| crashed | marked started, but a pidfile is gone or its pid is dead (the supervisor gave up) |
+| stopped | not marked started, and `/etc/init.d/<name>` exists |
+| unknown | no such init script, a name with odd characters, or `/run/openrc/started` is missing |
+
+A restart is detected when the supervisor's only child changes pid between two checks.
+Three of those (or outages) in ten minutes is a restart loop.
+
+## Confirmed as an unprivileged user (2026-11-22)
+
+All four reads the probe depends on work without root:
 
 ```sh
-# 1. Service state. Expect " * status: started" and exit code 0.
-rc-service <one-app> status; echo "exit=$?"
-
-# 2. Stop that service as root, then repeat as the unprivileged user.
-#    Expect "stopped" (exit 3). If you kill the process instead of stopping it,
-#    expect "crashed" (exit 32) for a plain OpenRC service.
-rc-service <one-app> status; echo "exit=$?"
-
-# 3. How is each app supervised?
-grep -l supervise-daemon /etc/init.d/* 2>/dev/null
-ls /run/openrc/daemons/<one-app>/ && cat /run/openrc/daemons/<one-app>/*
-
-# 4. OOM visibility from inside the container.
-cat /sys/fs/cgroup/memory.events      # expect a line "oom_kill N"
-dmesg | tail -3; echo "exit=$?"       # often denied in an LXC; that is fine
+ls /run/openrc/started/ | head -3
+cat /run/openrc/daemons/matinee/001 | grep pidfile
+cat /var/run/supervise-matinee.pid
+cat /proc/$(cat /var/run/supervise-matinee.pid)/task/*/children; echo
 ```
 
-## Assumptions in the code
+They returned service names, the `pidfile=` line, the supervisor's pid, and one child pid.
+Re-run them as the `logwatch` user after install; the result should be the same.
 
-| Behavior | Status |
-|---|---|
-| `rc-service <name> status` works for an unprivileged user | UNVERIFIED |
-| Output contains `status: started|stopped|crashed`; exit codes 0, 3, 32 | UNVERIFIED (text is preferred over the code) |
-| Daemon pid is found through `pidfile=` in `/run/openrc/daemons/<name>/*` | UNVERIFIED |
-| Under `supervise-daemon`, the pidfile holds the supervisor and the app is its only child | UNVERIFIED |
-| `/sys/fs/cgroup/memory.events` exists (cgroup v2) and is readable | UNVERIFIED |
+If one ever fails:
 
-## What happens if an assumption is wrong
-
-- Status not readable: one low-severity "Cannot read service state" alert per service. Nothing else breaks.
-- Pid not found: down and recovered alerts still work; restart-loop detection only counts full
-  down events, so a service that `supervise-daemon` respawns quickly would go unnoticed. If that
-  is your setup and check 3 shows a different layout, tell me what `/run/openrc/daemons/<name>/`
-  contains and the lookup can be fixed in `OpenRCProbe._pid`.
-- No `memory.events`: OOM detection is silently off.
-- `dmesg` denied: OOM alerts say "OOM kill in container" without naming the process.
+- `started/` unreadable: every service reports "Cannot read service state" (low). Nothing else breaks.
+- `daemons/` or the pidfile unreadable: up and stopped still work; crashes and restart loops are not seen.
+- `children` missing (kernel built without it): the probe falls back to scanning `/proc/*/stat`. No action needed.
 
 ## Containers
 
