@@ -1,0 +1,67 @@
+{
+ "about": "Only health checks and routine lines.",
+ "sources": [
+  {
+   "name": "app",
+   "service": "app-svc",
+   "logs": [
+    {
+     "file": "access.log",
+     "format": "combined"
+    },
+    {
+     "file": "app.log",
+     "format": "plain"
+    }
+   ]
+  }
+ ],
+ "llm": [],
+ "steps": [
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      10
+     ]
+    }
+   },
+   "append": [
+    {
+     "file": "access.log",
+     "repeat": 200,
+     "line": "192.0.2.10 - - [01/Jan/2026:12:00:00 +0000] \"GET /health HTTP/1.1\" 200 153 \"-\" \"curl/8.0\""
+    },
+    {
+     "file": "app.log",
+     "repeat": 30,
+     "line": "worker 3 finished job 8812 in 40ms"
+    }
+   ]
+  },
+  {
+   "probe": {
+    "services": {
+     "app-svc": [
+      "started",
+      10
+     ]
+    }
+   }
+  }
+ ],
+ "expected": {
+  "alerts": [],
+  "open_alerts": [],
+  "findings": [],
+  "digest_contains": [
+   "Nothing notable in the last 24 hours.",
+   "1 benign cluster"
+  ],
+  "digest_absent": [
+   "## Findings"
+  ],
+  "digest_severity": "low"
+ }
+}

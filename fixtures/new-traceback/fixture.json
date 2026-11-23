@@ -1,0 +1,64 @@
+{
+ "about": "A stack trace never seen before: the header hits a rule, the rest is classified by the model.",
+ "sources": [
+  {
+   "name": "app",
+   "logs": [
+    {
+     "file": "access.log",
+     "format": "combined"
+    },
+    {
+     "file": "app.log",
+     "format": "plain"
+    }
+   ]
+  }
+ ],
+ "llm": [
+  {
+   "match": "KeyError",
+   "category": "app_error",
+   "severity": "medium",
+   "summary": "New KeyError in the save handler",
+   "suspicious_content": false
+  }
+ ],
+ "steps": [
+  {
+   "append": [
+    {
+     "file": "app.log",
+     "repeat": 1,
+     "line": "Traceback (most recent call last):"
+    },
+    {
+     "file": "app.log",
+     "repeat": 1,
+     "line": "  File \"/srv/app/handlers.py\", line 88, in save"
+    },
+    {
+     "file": "app.log",
+     "repeat": 1,
+     "line": "KeyError: 'meal_id'"
+    }
+   ]
+  }
+ ],
+ "expected": {
+  "alerts": [],
+  "findings": [
+   {
+    "rule": "traceback",
+    "severity": "low",
+    "count": 1
+   }
+  ],
+  "digest_contains": [
+   "New KeyError in the save handler",
+   "app_error",
+   "traceback"
+  ],
+  "digest_severity": "medium"
+ }
+}

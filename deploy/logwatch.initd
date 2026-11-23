@@ -1,0 +1,25 @@
+#!/sbin/openrc-run
+# OpenRC service for logwatch. Install as /etc/init.d/logwatch (mode 0755).
+# Secrets are exported from /etc/conf.d/logwatch, which OpenRC sources automatically.
+
+name="logwatch"
+description="Read-only service and log watcher"
+
+supervisor="supervise-daemon"
+command="/opt/logwatch/venv/bin/logwatch"
+command_args="run /etc/logwatch/config.yaml"
+command_user="logwatch:logwatch"
+output_log="/var/log/logwatch/output.log"
+error_log="/var/log/logwatch/error.log"
+respawn_delay=10
+respawn_max=5
+respawn_period=300
+
+depend() {
+	need localmount
+	use net
+}
+
+start_pre() {
+	checkpath -d -o logwatch:logwatch -m 0750 /var/log/logwatch /var/lib/logwatch
+}
