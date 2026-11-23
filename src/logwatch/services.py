@@ -201,7 +201,7 @@ def tier1_cycle(
                     enqueue(
                         state,
                         f"Cannot read service state: {name}",
-                        f"rc-service gave no usable status for {src.service}. Check the name and permissions.",
+                        f"No readable OpenRC state for {src.service}. Check the service name and read access to /run/openrc.",
                         "low",
                     )
             churn = state.count_events(name, "down", window_start) + state.count_events(name, "respawn", window_start)
