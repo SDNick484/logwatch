@@ -31,65 +31,85 @@ class ServiceProbe(Protocol):
     def oom_victims(self, since: datetime) -> list[str]: ...
 
 
-def parse_rc_status(code: int, output: str) -> str:
-    """Map `rc-service <name> status` to a state. Output text wins over the exit code."""
-    text = output.lower()
-    if "does not exist" in text:
-        return "unknown"
-    for word in ("crashed", "stopped", "started"):
-        if f"status: {word}" in text:
-            return word
-    return {0: "started", 3: "stopped", 32: "crashed"}.get(code, "unknown")
-
-
 def _default_run(argv: list[str]) -> tuple[int, str]:
     done = subprocess.run(argv, capture_output=True, text=True, timeout=10, check=False)  # never a shell
     return done.returncode, done.stdout + done.stderr
 
 
 class OpenRCProbe:
-    """Reads service state on an OpenRC host. See deploy/probe-notes.md for what is verified."""
+    """Reads service state on an OpenRC host from files any user can read.
+
+    `rc-service <name> status` is not used: it sources /etc/conf.d/<name>, which is
+    root-only wherever that file holds secrets, so it fails for an unprivileged user.
+    This mirrors what OpenRC itself checks: the service is marked started, and the
+    pid in its pidfile is alive. See deploy/probe-notes.md.
+    """
 
     def __init__(
         self,
         run: Callable[[list[str]], tuple[int, str]] = _default_run,
         memory_events_path: str = "/sys/fs/cgroup/memory.events",
         openrc_run_dir: str = "/run/openrc",
+        initd_dir: str = "/etc/init.d",
+        proc_dir: str = "/proc",
         docker_api_url: str | None = None,
         http_client: httpx.Client | None = None,
     ):
         self._run = run
         self._memory_events = memory_events_path
-        self._run_dir = openrc_run_dir
+        self._run_dir = Path(openrc_run_dir)
+        self._initd = Path(initd_dir)
+        self._proc = Path(proc_dir)
         self._docker = docker_api_url
         self._http = http_client or httpx.Client(timeout=5.0)
         self._oom_kills: int | None = None
 
     def status(self, name: str) -> ServiceStatus:
-        if not _SAFE_NAME.match(name):
+        if not _SAFE_NAME.match(name) or not (self._run_dir / "started").is_dir():
             return ServiceStatus("unknown")
-        try:
-            code, output = self._run(["rc-service", name, "status"])
-        except (OSError, subprocess.SubprocessError):
-            return ServiceStatus("unknown")
-        state = parse_rc_status(code, output)
-        return ServiceStatus(state, self._pid(name) if state == "started" else None)  # type: ignore[arg-type]
+        if not os.path.lexists(self._run_dir / "started" / name):
+            return ServiceStatus("stopped" if (self._initd / name).exists() else "unknown")
+        pids = self._pidfile_pids(name)
+        if pids is None:
+            return ServiceStatus("started")  # no daemon record we can read: trust the started mark
+        if any(pid is None or not (self._proc / str(pid)).exists() for pid in pids):
+            return ServiceStatus("crashed")
+        return ServiceStatus("started", self._app_pid(pids[0]))  # type: ignore[arg-type]
 
-    def _pid(self, name: str) -> int | None:
-        """Best effort: the daemon's pid, or the supervised child when run under supervise-daemon."""
+    def _pidfile_pids(self, name: str) -> list[int | None] | None:
+        """Pids recorded for the service's daemons. A None entry: pidfile gone. None: nothing to check."""
+        pids: list[int | None] = []
         try:
-            for entry in sorted(Path(self._run_dir, "daemons", name).iterdir()):
+            for entry in sorted((self._run_dir / "daemons" / name).iterdir()):
                 for line in entry.read_text().splitlines():
                     if line.startswith("pidfile="):
-                        pid = int(Path(line.split("=", 1)[1]).read_text().split()[0])
-                        children = Path(f"/proc/{pid}/task/{pid}/children").read_text().split()
-                        comm = Path(f"/proc/{pid}/comm").read_text().strip()
-                        if comm == "supervise-daemon" and len(children) == 1:
-                            return int(children[0])
-                        return pid
+                        try:
+                            pids.append(int(Path(line.split("=", 1)[1]).read_text().split()[0]))
+                        except FileNotFoundError:
+                            pids.append(None)
         except (OSError, ValueError, IndexError):
             return None
-        return None
+        return pids or None
+
+    def _app_pid(self, pid: int) -> int | None:
+        """The pid whose change means a restart: the supervised child under supervise-daemon."""
+        try:
+            if (self._proc / str(pid) / "comm").read_text().strip() != "supervise-daemon":
+                return pid
+        except OSError:
+            return pid
+        try:
+            kids = [int(k) for k in (self._proc / str(pid) / "task" / str(pid) / "children").read_text().split()]
+        except (OSError, ValueError):
+            kids = []
+            for d in self._proc.iterdir():
+                if d.name.isdigit():
+                    try:
+                        if int((d / "stat").read_text().rsplit(")", 1)[1].split()[1]) == pid:
+                            kids.append(int(d.name))
+                    except (OSError, ValueError, IndexError):
+                        continue
+        return min(kids) if kids else None  # None: between respawns
 
     def container_running(self, name: str) -> bool | None:
         if not self._docker or not _SAFE_NAME.match(name):

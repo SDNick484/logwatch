@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from logwatch.config import Config, LLMConfig, LogFile, NotifyConfig, Source
-from logwatch.services import OpenRCProbe, ScriptedProbe, parse_rc_status, tier1_cycle
+from logwatch.services import OpenRCProbe, ScriptedProbe, tier1_cycle
 from logwatch.state import State
 
 T0 = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
@@ -133,29 +133,98 @@ def test_quiet_file_missing_is_not_tier1s_problem(tmp_path):
     assert sent == []
 
 
-def test_parse_rc_status():
-    assert parse_rc_status(0, " * status: started\n") == "started"
-    assert parse_rc_status(3, " * status: stopped\n") == "stopped"
-    assert parse_rc_status(32, " * status: crashed\n") == "crashed"
-    assert parse_rc_status(1, " * status: crashed\n") == "crashed"
-    assert parse_rc_status(1, "rc-service: service `x' does not exist\n") == "unknown"
-    assert parse_rc_status(127, "") == "unknown"
+def tree(tmp_path, started=("matinee",), initd=("matinee",), pidfile_pid=100,
+         procs={100: ("supervise-daemon", 1, [101]), 101: ("gunicorn", 100, [])}, children_file=True, daemon_entry=True):
+    """A fake /run/openrc, /etc/init.d and /proc, shaped like an Alpine box running supervise-daemon."""
+    run, initd_dir, proc = tmp_path / "run" / "openrc", tmp_path / "init.d", tmp_path / "proc"
+    (run / "started").mkdir(parents=True)
+    initd_dir.mkdir()
+    proc.mkdir()
+    for name in initd:
+        (initd_dir / name).write_text("#!/sbin/openrc-run\n")
+    for name in started:
+        (run / "started" / name).symlink_to(initd_dir / name)
+        if daemon_entry:
+            pidfile = tmp_path / "run" / f"supervise-{name}.pid"
+            if pidfile_pid is not None:
+                pidfile.write_text(f"{pidfile_pid}\n")
+            (run / "daemons" / name).mkdir(parents=True)
+            (run / "daemons" / name / "001").write_text(f"exec=/usr/bin/gunicorn\nargv_0=/usr/bin/gunicorn\npidfile={pidfile}\n")
+    for pid, (comm, ppid, kids) in procs.items():
+        d = proc / str(pid)
+        (d / "task" / str(pid)).mkdir(parents=True)
+        (d / "comm").write_text(comm + "\n")
+        (d / "stat").write_text(f"{pid} ({comm}) S {ppid} {pid} {pid} 0 -1 4194560\n")
+        if children_file:
+            (d / "task" / str(pid) / "children").write_text(" ".join(map(str, kids)) + (" " if kids else ""))
+    return OpenRCProbe(openrc_run_dir=str(run), initd_dir=str(initd_dir), proc_dir=str(proc))
 
 
-def test_openrc_probe_rejects_unsafe_names():
-    calls = []
-    probe = OpenRCProbe(run=lambda argv: calls.append(argv) or (0, " * status: started\n"))
-    assert probe.status("x; rm -rf /").state == "unknown"
-    assert calls == []
-    assert probe.status("dinner-app").state == "started"
-    assert calls == [["rc-service", "dinner-app", "status"]]
+def test_probe_started_under_supervise_daemon_reports_child_pid(tmp_path):
+    st = tree(tmp_path).status("matinee")
+    assert (st.state, st.pid) == ("started", 101)
 
 
-def test_openrc_probe_missing_binary_is_unknown():
+def test_probe_needs_no_subprocess_and_no_conf_d(tmp_path):
     def run(argv):
-        raise FileNotFoundError("rc-service")
+        raise AssertionError(f"probe must not shell out for status: {argv}")
 
-    assert OpenRCProbe(run=run).status("app").state == "unknown"
+    probe = tree(tmp_path)
+    probe._run = run
+    assert probe.status("matinee").state == "started"
+
+
+def test_probe_respawned_child_has_new_pid(tmp_path):
+    probe = tree(tmp_path, procs={100: ("supervise-daemon", 1, [205]), 205: ("gunicorn", 100, [])})
+    assert probe.status("matinee").pid == 205
+
+
+def test_probe_children_file_missing_falls_back_to_scanning_proc(tmp_path):
+    probe = tree(tmp_path, children_file=False,
+                 procs={100: ("supervise-daemon", 1, []), 7: ("other (odd) name", 1, []), 101: ("gunicorn", 100, []), 102: ("gunicorn", 101, [])})
+    assert probe.status("matinee").pid == 101
+
+
+def test_probe_supervisor_between_respawns_is_started_without_pid(tmp_path):
+    st = tree(tmp_path, procs={100: ("supervise-daemon", 1, [])}).status("matinee")
+    assert (st.state, st.pid) == ("started", None)
+
+
+def test_probe_plain_daemon_reports_pidfile_pid(tmp_path):
+    st = tree(tmp_path, procs={100: ("sshd", 1, [150])}).status("matinee")
+    assert (st.state, st.pid) == ("started", 100)
+
+
+def test_probe_stopped_service(tmp_path):
+    assert tree(tmp_path, started=()).status("matinee").state == "stopped"
+
+
+def test_probe_unknown_service(tmp_path):
+    assert tree(tmp_path, started=(), initd=("other",)).status("matinee").state == "unknown"
+
+
+def test_probe_started_but_process_gone_is_crashed(tmp_path):
+    assert tree(tmp_path, procs={}).status("matinee").state == "crashed"
+
+
+def test_probe_started_but_pidfile_gone_is_crashed(tmp_path):
+    assert tree(tmp_path, pidfile_pid=None).status("matinee").state == "crashed"
+
+
+def test_probe_started_without_daemon_entry_has_no_pid(tmp_path):
+    st = tree(tmp_path, daemon_entry=False).status("matinee")
+    assert (st.state, st.pid) == ("started", None)
+
+
+def test_probe_not_an_openrc_host_is_unknown(tmp_path):
+    probe = OpenRCProbe(openrc_run_dir=str(tmp_path / "nope"), initd_dir=str(tmp_path / "nope2"), proc_dir=str(tmp_path))
+    assert probe.status("matinee").state == "unknown"
+
+
+def test_openrc_probe_rejects_unsafe_names(tmp_path):
+    probe = tree(tmp_path)
+    assert probe.status("../../etc/passwd").state == "unknown"
+    assert probe.status("x; rm -rf /").state == "unknown"
 
 
 def test_openrc_probe_oom_counter(tmp_path):
