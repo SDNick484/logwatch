@@ -23,9 +23,9 @@
 A restart is detected when the supervisor's only child changes pid between two checks.
 Three of those (or outages) in ten minutes is a restart loop.
 
-## Still to confirm, as the `logwatch` user (all read-only)
+## Confirmed as an unprivileged user (2026-11-22)
 
-The observations above were made as root. These four reads must also work unprivileged:
+All four reads the probe depends on work without root:
 
 ```sh
 ls /run/openrc/started/ | head -3
@@ -34,9 +34,10 @@ cat /var/run/supervise-matinee.pid
 cat /proc/$(cat /var/run/supervise-matinee.pid)/task/*/children; echo
 ```
 
-Expected: service names, the `pidfile=` line, a number, and one number (the app's pid).
+They returned service names, the `pidfile=` line, the supervisor's pid, and one child pid.
+Re-run them as the `logwatch` user after install; the result should be the same.
 
-If one fails:
+If one ever fails:
 
 - `started/` unreadable: every service reports "Cannot read service state" (low). Nothing else breaks.
 - `daemons/` or the pidfile unreadable: up and stopped still work; crashes and restart loops are not seen.
