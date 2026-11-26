@@ -75,7 +75,7 @@ def digest_cycle(config: Config, state: State, client: LLMClient | None, now: da
     last = state.get_kv("digest:last")
     since = datetime.fromisoformat(last) if last else now - timedelta(hours=24)
     findings = state.findings_since(since)
-    clusters = cluster(state.take_remainder())
+    clusters = cluster(state.take_remainder(), max_clusters=100)
     if not clusters:
         classifications = []
     elif client is None:

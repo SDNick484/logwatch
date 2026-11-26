@@ -92,7 +92,7 @@ def render_digest(
 
     out = [f"# Logwatch digest: {now.date().isoformat()}", ""]
 
-    all_benign = classifications is not None and all(by_id[c.id].category == "benign" for c in rest if c.id in by_id)
+    all_benign = classifications is not None and all(c.id in by_id and by_id[c.id].category == "benign" for c in rest)
     if not merged and not flagged_clusters and (not rest or all_benign):
         out.append(QUIET_LINE)
         if rest:
@@ -132,6 +132,9 @@ def render_digest(
             out += [f"| {c.count} | {_plain(c.source)} | {_code(c.template)} |" for c in rest]
         else:
             rows = sorted(rest, key=lambda c: (SEVERITY_ORDER[by_id[c.id].severity] if c.id in by_id else 9, -c.count))
+            missing = sum(1 for c in rest if c.id not in by_id)
+            if missing:
+                out += [f"Model classification unavailable for {missing} of {len(rest)} clusters; those rows show the raw template only.", ""]
             out += ["| Count | Source | Category | Severity | Summary | Template |", "|---|---|---|---|---|---|"]
             for c in rows:
                 k = by_id.get(c.id)

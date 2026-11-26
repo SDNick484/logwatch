@@ -54,3 +54,23 @@ def test_json_field_values_redacted():
 
 def test_unknown_format_treated_as_plain():
     assert parse_line("app", "f", "weird", "hello").fields == {}
+
+
+def test_uvicorn_access_line_in_a_plain_log():
+    e = parse_line("mcp", "f", "plain", 'INFO uvicorn.access: x.x.x.12:54321 - "POST /mcp?session=abc HTTP/1.1" 202')
+    assert (e.fields["method"], e.fields["path"], e.fields["status"]) == ("POST", "/mcp", "202")
+    assert "abc" not in e.text
+
+
+def test_timestamped_access_line_in_a_plain_log():
+    e = parse_line("mcp", "f", "plain", '2026-11-25 07:00:01,123 INFO x.x.x.9:1 - "GET /healthz HTTP/1.1" 200 OK')
+    assert (e.fields["method"], e.fields["path"], e.fields["status"]) == ("GET", "/healthz", "200")
+
+
+def test_combined_line_declared_plain_is_still_parsed():
+    e = parse_line("app", "f", "plain", ACCESS)
+    assert e.fields["ip"] == "203.0.113.9" and e.fields["status"] == "404" and e.fields["path"] == "/.env"
+
+
+def test_ordinary_plain_line_gets_no_http_fields():
+    assert parse_line("app", "f", "plain", 'worker said "GET ready" 200 times').fields == {}

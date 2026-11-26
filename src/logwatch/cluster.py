@@ -16,6 +16,7 @@ _MASKS = [
     re.compile(r"\d+"),  # digit runs
 ]
 _WS = re.compile(r"\s+")
+_LEADING_TS = re.compile(r"^\[?\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?\]?\s*")
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class Cluster:
 
 
 def template_of(text: str) -> str:
+    text = _LEADING_TS.sub("", text)  # the same message at two times is the same message
     for rx in _MASKS:
         text = rx.sub("<*>", text)
     return _WS.sub(" ", text).strip()

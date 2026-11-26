@@ -33,6 +33,19 @@ def _combined(line: str) -> tuple[datetime | None, dict[str, str]]:
     return ts, {k: redact(v) for k, v in fields.items()}
 
 
+_HTTP_REQUEST = re.compile(
+    r'"(?P<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) (?P<target>/\S*) HTTP/[\d.]+" (?P<status>\d{3})\b'
+)
+
+
+def _http_request(line: str) -> dict[str, str]:
+    """Access lines from uvicorn, gunicorn and similar, wherever they sit in the line."""
+    m = _HTTP_REQUEST.search(line)
+    if not m:
+        return {}
+    return {"method": m["method"], "path": redact(m["target"].split("?", 1)[0]), "status": m["status"]}
+
+
 def _json(line: str) -> dict[str, str]:
     try:
         data = json.loads(line)
@@ -50,8 +63,12 @@ def _json(line: str) -> dict[str, str]:
 def parse_line(source: str, file: str, fmt: str, line: str) -> Event:
     ts: datetime | None = None
     fields: dict[str, str] = {}
-    if fmt == "combined":
-        ts, fields = _combined(line)
-    elif fmt == "json":
+    if fmt == "json":
         fields = _json(line)
+    else:
+        # Whatever the declared format, recognise an access line when we see one:
+        # many apps write access and application lines to the same file.
+        ts, fields = _combined(line)
+        if not fields:
+            fields = _http_request(line)
     return Event(source=source, file=file, ts=ts, text=redact(line), fields=fields)

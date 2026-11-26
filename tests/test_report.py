@@ -77,3 +77,11 @@ def test_untrusted_text_cannot_break_markdown():
     assert "\n# Heading" not in out
     assert "a \\| b" in out
     assert "](http://evil.example)" not in out
+
+
+def test_partly_classified_is_not_quiet_and_says_so():
+    cls = [Classification("c22222222", "benign", "low", "Timing lines", False)]  # C1 has no classification
+    out = render_digest([], [C1, C2], cls, NOW)
+    assert "Nothing notable" not in out
+    assert "Model classification unavailable for 1 of 2 clusters" in out
+    assert "KeyError: <*>" in out and "Timing lines" in out
