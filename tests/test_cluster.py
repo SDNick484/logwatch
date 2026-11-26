@@ -70,5 +70,12 @@ def test_access_events_cluster_by_method_path_status():
            [(c.template, c.count) for c in cs] == [("GET /odd/endpoint 200", 2), ("GET /item/<*> 404", 2)]
 
 
+def test_leading_timestamps_are_dropped_from_templates():
+    cs = cluster([ev("2026-11-25 07:00:01,123 ERROR lanscape: could not record status"),
+                  ev("2026-11-24T23:59:59.001+00:00 ERROR lanscape: could not record status"),
+                  ev("ERROR lanscape: could not record status")])
+    assert [(c.template, c.count) for c in cs] == [("ERROR lanscape: could not record status", 3)]
+
+
 def test_empty():
     assert cluster([]) == []

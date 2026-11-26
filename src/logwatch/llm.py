@@ -20,6 +20,7 @@ from .redact import mask_addresses, residual_secret_scan
 CATEGORIES = ("app_error", "security", "performance", "config", "benign", "unknown")
 SEVERITIES = ("low", "medium", "high")
 MAX_SUMMARY_CHARS = 300
+BATCH_SIZE = 15  # clusters per model call; keeps each reply far below the output limit
 
 SYSTEM_PROMPT = """You classify clusters of log lines for an operations digest.
 
@@ -33,10 +34,14 @@ Reply with a JSON array only, one object per input cluster, no prose:
 {"cluster_id": "<id from input>",
  "category": "app_error" | "security" | "performance" | "config" | "benign" | "unknown",
  "severity": "low" | "medium" | "high",
- "summary": "<one sentence, what this is and why it matters>",
+ "summary": "<what this is and why it matters, at most 15 words>",
  "suspicious_content": true | false}
 
 Use "unknown" when the lines do not say enough. Include every input cluster exactly once."""
+
+
+class ResponseTruncated(Exception):
+    """The model stopped at its output limit, so the reply is incomplete."""
 
 
 class LLMClient(Protocol):
@@ -64,6 +69,8 @@ class AnthropicClient:
             },
         )
         resp.raise_for_status()
+        if resp.json().get("stop_reason") == "max_tokens":
+            raise ResponseTruncated()
         return "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
 
 
@@ -129,25 +136,42 @@ def _parse(raw: str, ids: list[str]) -> list[Classification] | None:
     return [by_id[i] for i in ids]
 
 
-def classify(clusters: list[Cluster], client: LLMClient, audit_dir: Path) -> list[Classification] | None:
-    """Return one Classification per cluster, or None when the model cannot be trusted this run."""
-    if not clusters:
-        return []
+def _classify_batch(clusters: list[Cluster], client: LLMClient, audit_dir: Path) -> list[Classification] | None:
     system, user = build_request(clusters)
     raw: str | None = None
     error: str | None = None
-    for _ in range(2):  # one retry on transport errors only
+    for _ in range(2):  # one retry, on transport errors only
         try:
             raw = client.complete(system, user)
             error = None
             break
+        except ResponseTruncated:
+            error = "ResponseTruncated"  # asking again would truncate again
+            break
         except Exception as e:  # noqa: BLE001 - any client failure means "no classification"
             error = type(e).__name__
     result = _parse(raw, [c.id for c in clusters]) if raw is not None else None
-
-    audit_dir = Path(audit_dir)
-    audit_dir.mkdir(parents=True, exist_ok=True)
     (audit_dir / f"{time.time_ns()}.json").write_text(
         json.dumps({"system": system, "user": user, "response": raw, "error": error, "ok": result is not None}, indent=1)
     )
     return result
+
+
+def classify(clusters: list[Cluster], client: LLMClient, audit_dir: Path) -> list[Classification] | None:
+    """Classify clusters in batches.
+
+    Returns the classifications that came back valid, in input order. A cluster whose
+    batch failed is simply absent. None means no batch succeeded.
+    """
+    if not clusters:
+        return []
+    audit_dir = Path(audit_dir)
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    out: list[Classification] = []
+    any_ok = False
+    for i in range(0, len(clusters), BATCH_SIZE):
+        result = _classify_batch(clusters[i : i + BATCH_SIZE], client, audit_dir)
+        if result is not None:
+            any_ok = True
+            out += result
+    return out if any_ok else None
